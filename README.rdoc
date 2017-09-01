@@ -55,11 +55,11 @@ Also, if you pass the -r option, it'll annotate routes.rb with the output of
 
 Into Gemfile from rubygems.org:
 
-    gem 'annotate'
+    gem 'annotate', require: false
 
 Into Gemfile from Github:
 
-    gem 'annotate', git: 'https://github.com/ctran/annotate_models.git'
+    gem 'annotate', git: 'https://github.com/ctran/annotate_models.git', require: false
 
 Into environment gems from rubygems.org:
 
@@ -184,6 +184,8 @@ you can do so with a simple environment variable, instead of editing the
         -m, --show-migration             Include the migration version number in the annotation
         -i, --show-indexes               List the table's database indexes in the annotation
         -k, --show-foreign-keys          List the table's foreign key constraints in the annotation
+            --ck, --complete-foreign-keys
+                                         Complete foreign key names in the annotation
         -s, --simple-indexes             Concat the column's related indexes in the annotation
             --model-dir dir              Annotate model files stored in dir rather than app/models, separate multiple dirs with commas
             --ignore-model-subdirects    Ignore subdirectories of the models directory

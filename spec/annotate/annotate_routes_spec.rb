@@ -22,10 +22,10 @@ describe AnnotateRoutes do
       expect(File).to receive(:exists?).with(ROUTE_FILE).and_return(true)
 
       expect(File).to receive(:read).with(ROUTE_FILE).and_return("")
-      expect(AnnotateRoutes).to receive(:`).with('rake routes').and_return('                                      Prefix Verb       URI Pattern                                               Controller#Action
+      expect(AnnotateRoutes).to receive(:`).with('rake routes').and_return("                                      Prefix Verb       URI Pattern                                               Controller#Action
                                    myaction1 GET        /url1(.:format)                                           mycontroller1#action
                                    myaction2 POST       /url2(.:format)                                           mycontroller2#action
-                                   myaction3 DELETE|GET /url3(.:format)                                           mycontroller3#action')
+                                   myaction3 DELETE|GET /url3(.:format)                                           mycontroller3#action\n")
 
       expect(AnnotateRoutes).to receive(:puts).with(ANNOTATION_ADDED)
     end
@@ -55,6 +55,21 @@ describe AnnotateRoutes do
 # myaction3 | DELETE-GET | /url3(.:format) | mycontroller3#action\n")
 
       AnnotateRoutes.do_annotations(format_markdown: true)
+    end
+
+    it 'wraps annotation if wrapper is specified' do
+      expect(File).to receive(:open).with(ROUTE_FILE, 'wb').and_yield(mock_file)
+      expect(@mock_file).to receive(:puts).with("
+# START
+# == Route Map
+#
+#                                       Prefix Verb       URI Pattern                                               Controller#Action
+#                                    myaction1 GET        /url1(.:format)                                           mycontroller1#action
+#                                    myaction2 POST       /url2(.:format)                                           mycontroller2#action
+#                                    myaction3 DELETE|GET /url3(.:format)                                           mycontroller3#action
+# END\n")
+
+      AnnotateRoutes.do_annotations(wrapper_open: 'START', wrapper_close: 'END')
     end
   end
 
@@ -155,14 +170,82 @@ describe AnnotateRoutes do
     end
 
     it 'should remove trailing annotation and trim trailing newlines, but leave leading newlines alone' do
-      expect(File).to receive(:read).with(ROUTE_FILE).and_return("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nActionController::Routing...\nfoo\n\n\n\n\n\n\n\n\n\n\n# == Route Map\n#\n# another good line\n# good line\n")
-      expect(@mock_file).to receive(:puts).with(/\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nActionController::Routing...\nfoo\n/)
+      expect(File).to receive(:read).with(ROUTE_FILE).and_return(<<-EOS
+
+
+
+      ActionController::Routing...
+      foo
+
+
+      # == Route Map
+      #
+      # another good line
+      # good line
+      EOS
+                                                                )
+      expect(@mock_file).to receive(:puts).with(<<-EOS
+
+
+
+      ActionController::Routing...
+      foo
+      EOS
+                                               )
       AnnotateRoutes.remove_annotations
     end
 
     it 'should remove prepended annotation and trim leading newlines, but leave trailing newlines alone' do
-      expect(File).to receive(:read).with(ROUTE_FILE).and_return("# == Route Map\n#\n# another good line\n# good line\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nActionController::Routing...\nfoo\n\n\n\n\n\n\n\n\n\n\n")
-      expect(@mock_file).to receive(:puts).with(/ActionController::Routing...\nfoo\n\n\n\n\n\n\n\n\n\n\n/)
+      expect(File).to receive(:read).with(ROUTE_FILE).and_return(<<-EOS
+      # == Route Map
+      #
+      # another good line
+      # good line
+
+
+
+
+      Rails.application.routes.draw do
+        root 'root#index'
+      end
+
+
+
+      EOS
+                                                                )
+      expect(@mock_file).to receive(:puts).with(<<-EOS
+      Rails.application.routes.draw do
+        root 'root#index'
+      end
+
+
+
+      EOS
+                                               )
+      AnnotateRoutes.remove_annotations
+    end
+
+    it 'should not remove custom comments above route map' do
+      expect(File).to receive(:read).with(ROUTE_FILE).and_return(<<-EOS
+      # My comment
+      # == Route Map
+      #
+      # another good line
+      # good line
+      Rails.application.routes.draw do
+        root 'root#index'
+      end
+      EOS
+                                                                )
+
+      expect(@mock_file).to receive(:puts).with(<<-EOS
+      # My comment
+      Rails.application.routes.draw do
+        root 'root#index'
+      end
+      EOS
+                                               )
+
       AnnotateRoutes.remove_annotations
     end
   end

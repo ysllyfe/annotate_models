@@ -5,11 +5,14 @@ require 'annotate/active_record_patch'
 require 'active_support/core_ext/string'
 
 describe AnnotateModels do
-  def mock_index(name, columns = [], unique = false)
+  def mock_index(name, params = {})
     double('IndexKeyDefinition',
            name:          name,
-           columns:       columns,
-           unique:        unique)
+           columns:       params[:columns] || [],
+           unique:        params[:unique] || false,
+           orders:        params[:orders] || {},
+           where:         params[:where],
+           using:         params[:using])
   end
 
   def mock_foreign_key(name, from_column, to_table, to_column = 'id', constraints = {})
@@ -302,8 +305,8 @@ EOS
                        [
                          mock_column(:id, :integer),
                          mock_column(:foreign_thing_id, :integer)
-                       ], [mock_index('index_rails_02e851e3b7', ['id']),
-                       mock_index('index_rails_02e851e3b8', ['foreign_thing_id'])])
+                       ], [mock_index('index_rails_02e851e3b7', columns: ['id']),
+                       mock_index('index_rails_02e851e3b8', columns: ['foreign_thing_id'])])
     expect(AnnotateModels.get_schema_info(klass, 'Schema Info', show_indexes: true)).to eql(<<-EOS)
 # Schema Info
 #
@@ -320,14 +323,118 @@ EOS
 EOS
   end
 
+  it 'should get ordered indexes keys' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column("id", :integer),
+                         mock_column("firstname", :string),
+                         mock_column("surname", :string),
+                         mock_column("value", :string)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: %w(firstname surname value),
+                                    orders: { 'surname' => :asc, 'value' => :desc })
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, 'Schema Info', show_indexes: true)).to eql(<<-EOS)
+# Schema Info
+#
+# Table name: users
+#
+#  id        :integer          not null, primary key
+#  firstname :string           not null
+#  surname   :string           not null
+#  value     :string           not null
+#
+# Indexes
+#
+#  index_rails_02e851e3b7  (id)
+#  index_rails_02e851e3b8  (firstname,surname ASC,value DESC)
+#
+EOS
+  end
+
+  it 'should get indexes keys with where clause' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column("id", :integer),
+                         mock_column("firstname", :string),
+                         mock_column("surname", :string),
+                         mock_column("value", :string)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: %w(firstname surname),
+                                    where: 'value IS NOT NULL')
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, 'Schema Info', show_indexes: true)).to eql(<<-EOS)
+# Schema Info
+#
+# Table name: users
+#
+#  id        :integer          not null, primary key
+#  firstname :string           not null
+#  surname   :string           not null
+#  value     :string           not null
+#
+# Indexes
+#
+#  index_rails_02e851e3b7  (id)
+#  index_rails_02e851e3b8  (firstname,surname) WHERE value IS NOT NULL
+#
+EOS
+  end
+
+  it 'should get indexes keys with using clause other than btree' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column("id", :integer),
+                         mock_column("firstname", :string),
+                         mock_column("surname", :string),
+                         mock_column("value", :string)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: %w(firstname surname),
+                                    using: 'hash')
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, 'Schema Info', show_indexes: true)).to eql(<<-EOS)
+# Schema Info
+#
+# Table name: users
+#
+#  id        :integer          not null, primary key
+#  firstname :string           not null
+#  surname   :string           not null
+#  value     :string           not null
+#
+# Indexes
+#
+#  index_rails_02e851e3b7  (id)
+#  index_rails_02e851e3b8  (firstname,surname) USING hash
+#
+EOS
+  end
+
   it 'should get simple indexes keys' do
     klass = mock_class(:users,
                        :id,
                        [
                          mock_column(:id, :integer),
                          mock_column(:foreign_thing_id, :integer)
-                       ], [mock_index('index_rails_02e851e3b7', ['id']),
-                       mock_index('index_rails_02e851e3b8', ['foreign_thing_id'])])
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'],
+                                    orders: { 'foreign_thing_id' => :desc })
+                       ])
     expect(AnnotateModels.get_schema_info(klass, 'Schema Info', simple_indexes: true)).to eql(<<-EOS)
 # Schema Info
 #
@@ -345,8 +452,8 @@ EOS
                        [
                          mock_column("id", :integer),
                          mock_column("name", :string)
-                       ], [mock_index('index_rails_02e851e3b7', ['id']),
-                       mock_index('index_rails_02e851e3b8', 'LOWER(name)')])
+                       ], [mock_index('index_rails_02e851e3b7', columns: ['id']),
+                       mock_index('index_rails_02e851e3b8', columns: 'LOWER(name)')])
     expect(AnnotateModels.get_schema_info(klass, 'Schema Info', simple_indexes: true)).to eql(<<-EOS)
 # Schema Info
 #
@@ -460,8 +567,12 @@ EOS
                        [
                          mock_column(:id, :integer),
                          mock_column(:name, :string, limit: 50)
-                       ], [mock_index('index_rails_02e851e3b7', ['id']),
-                       mock_index('index_rails_02e851e3b8', ['foreign_thing_id'])])
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'])
+                       ])
     expect(AnnotateModels.get_schema_info(klass, AnnotateModels::PREFIX, format_markdown: true, show_indexes: true)).to eql(<<-EOS)
 # #{AnnotateModels::PREFIX}
 #
@@ -482,6 +593,162 @@ EOS
 #     * **`foreign_thing_id`**
 #
 EOS
+  end
+
+  it 'should get schema info as Markdown with unique indexes' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column(:id, :integer),
+                         mock_column(:name, :string, limit: 50)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'],
+                                    unique: true)
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, AnnotateModels::PREFIX, format_markdown: true, show_indexes: true)).to eql(<<-EOS)
+# #{AnnotateModels::PREFIX}
+#
+# Table name: `users`
+#
+# ### Columns
+#
+# Name        | Type               | Attributes
+# ----------- | ------------------ | ---------------------------
+# **`id`**    | `integer`          | `not null, primary key`
+# **`name`**  | `string(50)`       | `not null`
+#
+# ### Indexes
+#
+# * `index_rails_02e851e3b7`:
+#     * **`id`**
+# * `index_rails_02e851e3b8` (_unique_):
+#     * **`foreign_thing_id`**
+#
+EOS
+  end
+
+  it 'should get schema info as Markdown with ordered indexes' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column(:id, :integer),
+                         mock_column(:name, :string, limit: 50)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'],
+                                    orders: { 'foreign_thing_id' => :desc })
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, AnnotateModels::PREFIX, format_markdown: true, show_indexes: true)).to eql(<<-EOS)
+# #{AnnotateModels::PREFIX}
+#
+# Table name: `users`
+#
+# ### Columns
+#
+# Name        | Type               | Attributes
+# ----------- | ------------------ | ---------------------------
+# **`id`**    | `integer`          | `not null, primary key`
+# **`name`**  | `string(50)`       | `not null`
+#
+# ### Indexes
+#
+# * `index_rails_02e851e3b7`:
+#     * **`id`**
+# * `index_rails_02e851e3b8`:
+#     * **`foreign_thing_id DESC`**
+#
+EOS
+  end
+
+  it 'should get schema info as Markdown with indexes with WHERE clause' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column(:id, :integer),
+                         mock_column(:name, :string, limit: 50)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'],
+                                    unique: true,
+                                    where: 'name IS NOT NULL')
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, AnnotateModels::PREFIX, format_markdown: true, show_indexes: true)).to eql(<<-EOS)
+# #{AnnotateModels::PREFIX}
+#
+# Table name: `users`
+#
+# ### Columns
+#
+# Name        | Type               | Attributes
+# ----------- | ------------------ | ---------------------------
+# **`id`**    | `integer`          | `not null, primary key`
+# **`name`**  | `string(50)`       | `not null`
+#
+# ### Indexes
+#
+# * `index_rails_02e851e3b7`:
+#     * **`id`**
+# * `index_rails_02e851e3b8` (_unique_ _where_ name IS NOT NULL):
+#     * **`foreign_thing_id`**
+#
+EOS
+  end
+
+  it 'should get schema info as Markdown with indexes with using clause other than btree' do
+    klass = mock_class(:users,
+                       :id,
+                       [
+                         mock_column(:id, :integer),
+                         mock_column(:name, :string, limit: 50)
+                       ],
+                       [
+                         mock_index('index_rails_02e851e3b7', columns: ['id']),
+                         mock_index('index_rails_02e851e3b8',
+                                    columns: ['foreign_thing_id'],
+                                    using: 'hash')
+                       ])
+    expect(AnnotateModels.get_schema_info(klass, AnnotateModels::PREFIX, format_markdown: true, show_indexes: true)).to eql(<<-EOS)
+# #{AnnotateModels::PREFIX}
+#
+# Table name: `users`
+#
+# ### Columns
+#
+# Name        | Type               | Attributes
+# ----------- | ------------------ | ---------------------------
+# **`id`**    | `integer`          | `not null, primary key`
+# **`name`**  | `string(50)`       | `not null`
+#
+# ### Indexes
+#
+# * `index_rails_02e851e3b7`:
+#     * **`id`**
+# * `index_rails_02e851e3b8` (_using_ hash):
+#     * **`foreign_thing_id`**
+#
+EOS
+  end
+
+  describe '#set_defaults' do
+    it 'should default show_complete_foreign_keys to false' do
+      expect(Annotate.true?(ENV['show_complete_foreign_keys'])).to be(false)
+    end
+
+    it 'should be able to set show_complete_foreign_keys to true' do
+      Annotate.set_defaults('show_complete_foreign_keys' => 'true')
+      expect(Annotate.true?(ENV['show_complete_foreign_keys'])).to be(true)
+    end
+
+    after :each do
+      ENV.delete('show_complete_foreign_keys')
+    end
   end
 
   describe '#get_schema_info with custom options' do
@@ -898,6 +1165,28 @@ end
       EOS
     end
 
+    it 'should remove annotate if CRLF is used for line breaks' do
+      path = create 'before.rb', <<-EOS
+# == Schema Information
+#
+# Table name: foo\r\n#
+#  id                  :integer         not null, primary key
+#  created_at          :datetime
+#  updated_at          :datetime
+#
+\r\n
+class Foo < ActiveRecord::Base
+end
+      EOS
+
+      AnnotateModels.remove_annotation_of_file(path)
+
+      expect(content(path)).to eq <<-EOS
+class Foo < ActiveRecord::Base
+end
+      EOS
+    end
+
     it 'should remove after annotate' do
       path = create 'after.rb', <<-EOS
 class Foo < ActiveRecord::Base
@@ -926,6 +1215,29 @@ end
       path = create 'opening_wrapper.rb', <<-EOS
 # wrapper
 # == Schema Information
+#
+# Table name: foo
+#
+#  id                  :integer         not null, primary key
+#  created_at          :datetime
+#  updated_at          :datetime
+#
+
+class Foo < ActiveRecord::Base
+end
+      EOS
+
+      AnnotateModels.remove_annotation_of_file(path, wrapper_open: 'wrapper')
+
+      expect(content(path)).to eq <<-EOS
+class Foo < ActiveRecord::Base
+end
+      EOS
+    end
+
+    it 'should remove wrapper if CRLF is used for line breaks' do
+      path = create 'opening_wrapper.rb', <<-EOS
+# wrapper\r\n# == Schema Information
 #
 # Table name: foo
 #
@@ -1161,6 +1473,30 @@ end
             expect(file.readline).to eq "#{lines[index]}\n"
           end
         end
+      end
+    end
+
+    it 'adds an empty line between magic comments and annotation (position :before)' do
+      content = "class User < ActiveRecord::Base\nend\n"
+      magic_comments_list_each do |magic_comment|
+        model_file_name, = write_model 'user.rb', "#{magic_comment}\n#{content}"
+
+        annotate_one_file position: :before
+        schema_info = AnnotateModels.get_schema_info(@klass, '== Schema Info')
+
+        expect(File.read(model_file_name)).to eq("#{magic_comment}\n\n#{schema_info}\n#{content}")
+      end
+    end
+
+    it 'adds an empty line between magic comments and model file content (position :after)' do
+      content = "class User < ActiveRecord::Base\nend\n"
+      magic_comments_list_each do |magic_comment|
+        model_file_name, = write_model 'user.rb', "#{magic_comment}\n#{content}"
+
+        annotate_one_file position: :after
+        schema_info = AnnotateModels.get_schema_info(@klass, '== Schema Info')
+
+        expect(File.read(model_file_name)).to eq("#{magic_comment}\n\n#{content}\n#{schema_info}")
       end
     end
 

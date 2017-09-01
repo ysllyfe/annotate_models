@@ -30,14 +30,15 @@ module Annotate
     :show_indexes, :simple_indexes, :include_version, :exclude_tests,
     :exclude_fixtures, :exclude_factories, :ignore_model_sub_dir,
     :format_bare, :format_rdoc, :format_markdown, :sort, :force, :trace,
-    :timestamp, :exclude_serializers, :classified_sort, :show_foreign_keys,
+    :timestamp, :exclude_serializers, :classified_sort,
+    :show_foreign_keys, :show_complete_foreign_keys,
     :exclude_scaffolds, :exclude_controllers, :exclude_helpers,
     :exclude_sti_subclasses, :ignore_unknown_models
   ].freeze
   OTHER_OPTIONS = [
     :ignore_columns, :skip_on_db_migrate, :wrapper_open, :wrapper_close,
     :wrapper, :routes, :hide_limit_column_types, :hide_default_column_types,
-    :ignore_routes, :active_admin
+    :ignore_routes, :active_admin, :with_comment
   ].freeze
   PATH_OPTIONS = [
     :require, :model_dir, :root_dir
@@ -113,7 +114,7 @@ module Annotate
   end
 
   def self.include_models?
-    true
+    ENV['routes'] !~ TRUE_RE
   end
 
   def self.loaded_tasks=(val)
