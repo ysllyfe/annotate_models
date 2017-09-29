@@ -116,8 +116,8 @@ module AnnotateModels
 
     def fixture_files(root_directory)
       [
-        File.join(root_directory, FIXTURE_TEST_DIR, "%TABLE_NAME%.yml"),
-        File.join(root_directory, FIXTURE_SPEC_DIR, "%TABLE_NAME%.yml"),
+        # File.join(root_directory, FIXTURE_TEST_DIR, "%TABLE_NAME%.yml"),
+        # File.join(root_directory, FIXTURE_SPEC_DIR, "%TABLE_NAME%.yml"),
         File.join(root_directory, FIXTURE_TEST_DIR, "%PLURALIZED_MODEL_NAME%.yml"),
         File.join(root_directory, FIXTURE_SPEC_DIR, "%PLURALIZED_MODEL_NAME%.yml")
       ]
@@ -140,8 +140,8 @@ module AnnotateModels
         File.join(root_directory, BLUEPRINTS_SPEC_DIR,    "%MODEL_NAME%_blueprint.rb"),
         File.join(root_directory, FACTORY_GIRL_TEST_DIR,  "%MODEL_NAME%_factory.rb"),    # (old style)
         File.join(root_directory, FACTORY_GIRL_SPEC_DIR,  "%MODEL_NAME%_factory.rb"),    # (old style)
-        File.join(root_directory, FACTORY_GIRL_TEST_DIR,  "%TABLE_NAME%.rb"),            # (new style)
-        File.join(root_directory, FACTORY_GIRL_SPEC_DIR,  "%TABLE_NAME%.rb"),            # (new style)
+        # File.join(root_directory, FACTORY_GIRL_TEST_DIR,  "%TABLE_NAME%.rb"),            # (new style)
+        # File.join(root_directory, FACTORY_GIRL_SPEC_DIR,  "%TABLE_NAME%.rb"),            # (new style)
         File.join(root_directory, FACTORY_GIRL_TEST_DIR,  "%PLURALIZED_MODEL_NAME%.rb"), # (new style)
         File.join(root_directory, FACTORY_GIRL_SPEC_DIR,  "%PLURALIZED_MODEL_NAME%.rb"), # (new style)
         File.join(root_directory, FABRICATORS_TEST_DIR,   "%MODEL_NAME%_fabricator.rb"),
